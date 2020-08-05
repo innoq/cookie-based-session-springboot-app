@@ -102,4 +102,4 @@ a successful login.
 
 --- 
 
-[blog post]: ...
+[blog post]: https://innoq.com/en/blog/cookie-based-spring-security-session/
