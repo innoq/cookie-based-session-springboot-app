@@ -21,7 +21,7 @@ import java.util.stream.Collectors;
 
 import static java.util.stream.Collectors.toList;
 
-public class UserInfoCookie extends Cookie {
+public class SignedUserInfoCookie extends Cookie {
 
   public static final String NAME = "UserInfo";
   private static final String PATH = "/";
@@ -31,35 +31,39 @@ public class UserInfoCookie extends Cookie {
   private static final Pattern HMAC_PATTERN = Pattern.compile("hmac=([A-Za-z0-9+/=]*)");
   private static final String HMAC_SHA_512 = "HmacSHA512";
 
-  private final String username;
-  private final List<String> roles;
-  private final String colour;
-  private String hmac;
+  private final Payload payload;
+  private final String hmac;
 
-  public UserInfoCookie(UserInfo userInfo) {
+  public SignedUserInfoCookie(UserInfo userInfo, String cookieHmacKey) {
     super(NAME, "");
-    this.username = userInfo.getUsername();
-    this.roles = userInfo.getAuthorities().stream().map(GrantedAuthority::getAuthority).collect(toList());
-    this.colour = userInfo.getColour().orElse(null);
-    this.hmac = null; // will be set by the {@link #signWith(String)} method
+    this.payload = new Payload(
+      userInfo.getUsername(),
+      userInfo.getAuthorities().stream().map(GrantedAuthority::getAuthority).collect(toList()),
+      userInfo.getColour().orElse(null));
+    this.hmac = calculateHmac(this.payload, cookieHmacKey);
     this.setPath(PATH);
     this.setMaxAge((int) Duration.of(1, ChronoUnit.HOURS).toSeconds());
     this.setHttpOnly(true);
   }
 
-  public static UserInfoCookie fromCookie(Cookie cookie) {
-    if (!NAME.equals(cookie.getName())) {
-      throw new IllegalArgumentException("No " + NAME + " Cookie");
-    }
-    return new UserInfoCookie(cookie);
-  }
-
-  private UserInfoCookie(Cookie cookie) {
+  public SignedUserInfoCookie(Cookie cookie, String cookieHmacKey) {
     super(NAME, "");
-    this.username = parse(cookie.getValue(), UID_PATTERN).orElseThrow(() -> new IllegalArgumentException(NAME + " Cookie contains no UID"));
-    this.roles = parse(cookie.getValue(), ROLES_PATTERN).map(s -> List.of(s.split("\\|"))).orElse(List.of());
-    this.colour = parse(cookie.getValue(), COLOUR_PATTERN).orElse(null);
+
+    if (!NAME.equals(cookie.getName()))
+      throw new IllegalArgumentException("No " + NAME + " Cookie");
+
     this.hmac = parse(cookie.getValue(), HMAC_PATTERN).orElse(null);
+    if (hmac == null)
+      throw new CookieVerificationFailedException("Cookie not signed (no HMAC)");
+
+    String username = parse(cookie.getValue(), UID_PATTERN).orElseThrow(() -> new IllegalArgumentException(NAME + " Cookie contains no UID"));
+    List<String> roles = parse(cookie.getValue(), ROLES_PATTERN).map(s -> List.of(s.split("\\|"))).orElse(List.of());
+    String colour = parse(cookie.getValue(), COLOUR_PATTERN).orElse(null);
+    this.payload = new Payload(username, roles, colour);
+
+    if (!hmac.equals(calculateHmac(payload, cookieHmacKey)))
+      throw new CookieVerificationFailedException("Cookie signature (HMAC) invalid");
+
     this.setPath(cookie.getPath());
     this.setMaxAge(cookie.getMaxAge());
     this.setHttpOnly(cookie.isHttpOnly());
@@ -82,41 +86,19 @@ public class UserInfoCookie extends Cookie {
 
   @Override
   public String getValue() {
-    return getPayload() + appendHmac();
-  }
-
-  private String getPayload() {
-    return "uid=" + username +
-      "&roles=" + String.join("|", roles) +
-      (colour != null ? "&colour=" + colour : "");
-  }
-
-  private String appendHmac() {
-    if (hmac == null)
-      return "";
-    return "&hmac=" + hmac;
+    return payload.toString() + "&hmac=" + hmac;
   }
 
   public UserInfo getUserInfo() {
-    var userInfo = new UserInfo(username, roles.stream().map(SimpleGrantedAuthority::new).collect(Collectors.toSet()));
-    userInfo.setColour(colour);
-    return userInfo;
+    return new UserInfo(
+      payload.username,
+      payload.roles.stream().map(SimpleGrantedAuthority::new).collect(Collectors.toSet()),
+      payload.colour);
   }
 
-  public void signWith(String secretKey) {
-    this.hmac = calculateHmac(getPayload(), secretKey);
-  }
-
-  public void verifyWith(String secretKey) {
-    if (this.hmac == null)
-      throw new CookieVerificationFailedException("Cookie not signed (no HMAC)");
-    if (!this.hmac.equals(calculateHmac(getPayload(), secretKey)))
-      throw new CookieVerificationFailedException("Cookie signature (HMAC) invalid");
-  }
-
-  private String calculateHmac(String value, String secretKey) {
+  private String calculateHmac(Payload payload, String secretKey) {
     byte[] secretKeyBytes = Objects.requireNonNull(secretKey).getBytes(StandardCharsets.UTF_8);
-    byte[] valueBytes = Objects.requireNonNull(value).getBytes(StandardCharsets.UTF_8);
+    byte[] valueBytes = Objects.requireNonNull(payload).toString().getBytes(StandardCharsets.UTF_8);
 
     try {
       Mac mac = Mac.getInstance(HMAC_SHA_512);
@@ -130,25 +112,44 @@ public class UserInfoCookie extends Cookie {
     }
   }
 
+  private static class Payload {
+    private final String username;
+    private final List<String> roles;
+    private final String colour;
+
+    private Payload(String username, List<String> roles, String colour) {
+      this.username = username;
+      this.roles = roles;
+      this.colour = colour;
+    }
+
+    @Override
+    public String toString() {
+      return "uid=" + username +
+        "&roles=" + String.join("|", roles) +
+        (colour != null ? "&colour=" + colour : "");
+    }
+  }
+
   /**
    * Only for testing.
    */
   String getUsername() {
-    return username;
+    return payload.username;
   }
 
   /**
    * Only for testing.
    */
   List<String> getRoles() {
-    return roles;
+    return payload.roles;
   }
 
   /**
    * Only for testing.
    */
   String getColour() {
-    return colour;
+    return payload.colour;
   }
 
   /**
@@ -158,10 +159,4 @@ public class UserInfoCookie extends Cookie {
     return hmac;
   }
 
-  /**
-   * Only for testing.
-   */
-  void setHmac(String hmac) {
-    this.hmac = hmac;
-  }
 }

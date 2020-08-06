@@ -21,6 +21,11 @@ public class UserInfo implements UserDetails {
     this(username, "", authorities);
   }
 
+  UserInfo(String username, Set<GrantedAuthority> authorities, String colour) {
+    this(username, "", authorities);
+    this.colour = colour;
+  }
+
   UserInfo(String username, String password, Set<GrantedAuthority> authorities) {
     this.username = username;
     this.password = password;

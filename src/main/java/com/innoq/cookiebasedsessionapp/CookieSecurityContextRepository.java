@@ -69,20 +69,18 @@ public class CookieSecurityContextRepository implements SecurityContextRepositor
     }
 
     Optional<Cookie> maybeCookie = Stream.of(request.getCookies())
-      .filter(c -> UserInfoCookie.NAME.equals(c.getName()))
+      .filter(c -> SignedUserInfoCookie.NAME.equals(c.getName()))
       .findFirst();
 
     if (maybeCookie.isEmpty()) {
-      LOG.debug("No {} cookie in request", UserInfoCookie.NAME);
+      LOG.debug("No {} cookie in request", SignedUserInfoCookie.NAME);
     }
 
     return maybeCookie;
   }
 
   private UserInfo createUserInfo(Cookie cookie) {
-    UserInfoCookie userInfoCookie = UserInfoCookie.fromCookie(cookie);
-    userInfoCookie.verifyWith(cookieHmacKey);
-    return userInfoCookie.getUserInfo();
+    return new SignedUserInfoCookie(cookie, cookieHmacKey).getUserInfo();
   }
 
   private class SaveToCookieResponseWrapper extends SaveContextOnUpdateOrErrorResponseWrapper {
@@ -114,8 +112,7 @@ public class CookieSecurityContextRepository implements SecurityContextRepositor
       }
 
       UserInfo userInfo = (UserInfo) authentication.getPrincipal();
-      UserInfoCookie cookie = new UserInfoCookie(userInfo);
-      cookie.signWith(cookieHmacKey);
+      SignedUserInfoCookie cookie = new SignedUserInfoCookie(userInfo, cookieHmacKey);
       cookie.setSecure(request.isSecure());
       response.addCookie(cookie);
       LOG.debug("SecurityContext for principal '{}' saved in Cookie", userInfo.getUsername());

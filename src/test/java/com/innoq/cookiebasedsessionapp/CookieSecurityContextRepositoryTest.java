@@ -65,7 +65,7 @@ public class CookieSecurityContextRepositoryTest {
 
   @BeforeEach
   public void setupUserInfoCookie() {
-    lenient().when(userInfoCookie.getName()).thenReturn(UserInfoCookie.NAME);
+    lenient().when(userInfoCookie.getName()).thenReturn(SignedUserInfoCookie.NAME);
     lenient().when(userInfoCookie.getValue()).thenReturn(COOKIE_VALUE);
   }
 
@@ -141,7 +141,7 @@ public class CookieSecurityContextRepositoryTest {
 
     verify(response).addCookie(cookieCaptor.capture());
     Cookie cookie = cookieCaptor.getValue();
-    assertThat(cookie.getName()).isEqualTo(UserInfoCookie.NAME);
+    assertThat(cookie.getName()).isEqualTo(SignedUserInfoCookie.NAME);
     assertThat(cookie.getValue()).isEqualTo(COOKIE_VALUE);
   }
 

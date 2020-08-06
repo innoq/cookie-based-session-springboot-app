@@ -40,7 +40,7 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
 
       // store SecurityContext in Cookie / delete Cookie on logout
       .securityContext().securityContextRepository(cookieSecurityContextRepository)
-      .and().logout().permitAll().deleteCookies(UserInfoCookie.NAME)
+      .and().logout().permitAll().deleteCookies(SignedUserInfoCookie.NAME)
 
       // deactivate RequestCache and append originally requested URL as query parameter to login form request
       .and().requestCache().disable()
