@@ -27,7 +27,7 @@ public class SignedUserInfoCookie extends Cookie {
   private static final String PATH = "/";
   private static final Pattern UID_PATTERN = Pattern.compile("uid=([A-Za-z0-9]*)");
   private static final Pattern ROLES_PATTERN = Pattern.compile("roles=([A-Z0-9_|]*)");
-  private static final Pattern COLOUR_PATTERN = Pattern.compile("colour=([A-Z]*)");
+  private static final Pattern COLOUR_PATTERN = Pattern.compile("colour=([A-Za-z]*)");
   private static final Pattern HMAC_PATTERN = Pattern.compile("hmac=([A-Za-z0-9+/=]*)");
   private static final String HMAC_SHA_512 = "HmacSHA512";
 
